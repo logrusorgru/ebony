@@ -19,6 +19,18 @@ import (
 	"runtime"
 )
 
+#define IndexType uint
+#define ValueType interface{}
+#define CountType uint
+
+#define Less(a,b) a < b
+#define Grater(a,b) a > b
+
+#define Equal(a,b) a == b
+
+#define LessOrEqual(a,b) a <= b
+#define GraterOrEqual(a,b) a >= b
+
 const (
 	red   = true
 	black = false
@@ -29,8 +41,8 @@ type node struct {
 	right  *node
 	parent *node
 	color  bool
-	id     uint
-	value  interface{}
+	id     IndexType
+	value  ValueType
 }
 
 var sentinel = &node{nil, nil, nil, black, 0, nil}
@@ -39,10 +51,9 @@ func init() {
 	sentinel.left, sentinel.right = sentinel, sentinel
 }
 
-// Tree
 type Tree struct {
 	root  *node
-	count uint
+	count CountType
 }
 
 func (t *Tree) rotateLeft(x *node) {
@@ -132,17 +143,16 @@ func (t *Tree) insertFixup(x *node) {
 	t.root.color = black
 }
 
-// silent rewrite if exist
-func (t *Tree) insertNode(id uint, value interface{}) {
+func (t *Tree) insertNode(id IndexType, value ValueType) {
 	current := t.root
 	var parent *node
 	for current != sentinel {
-		if id == current.id {
+		if Equal(id, current.id) {
 			current.value = value
 			return
 		}
 		parent = current
-		if id < current.id {
+		if Less(id, current.id) {
 			current = current.left
 		} else {
 			current = current.right
@@ -157,7 +167,7 @@ func (t *Tree) insertNode(id uint, value interface{}) {
 		id:     id,
 	}
 	if parent != nil {
-		if id < parent.id {
+		if Less(id, parent.id) {
 			parent.left = x
 		} else {
 			parent.right = x
@@ -263,13 +273,13 @@ func (t *Tree) deleteNode(z *node) {
 	t.count--
 }
 
-func (t *Tree) findNode(id uint) *node {
+func (t *Tree) findNode(id IndexType) *node {
 	current := t.root
 	for current != sentinel {
-		if id == current.id {
+		if Equal(id, current.id) {
 			return current
 		}
-		if id < current.id {
+		if Less(id, current.id) {
 			current = current.left
 		} else {
 			current = current.right
@@ -278,54 +288,39 @@ func (t *Tree) findNode(id uint) *node {
 	return sentinel
 }
 
-// create new RB-Tree
 func New() *Tree {
 	return &Tree{
 		root: sentinel,
 	}
 }
 
-// Set, silent O(logn). This will overwrite the existing value.
-// To simulate SetNx() method use:
-//
-//    if !tr.Exist(key) {
-//        tr.Set(key, value)
-//    }
-//
-// Its complexity from O(logn) to O(2logn)
-func (t *Tree) Set(id uint, value interface{}) {
+func (t *Tree) Set(id IndexType, value ValueType) {
 	t.insertNode(id, value)
 }
 
-// Del, silent O(logn)
-func (t *Tree) Del(id uint) {
+func (t *Tree) Del(id IndexType) {
 	t.deleteNode(t.findNode(id))
 }
 
-// Get O(logn)
-func (t *Tree) Get(id uint) interface{} {
+func (t *Tree) Get(id IndexType) ValueType {
 	return t.findNode(id).value
 }
 
-// Exist O(logn)
-func (t *Tree) Exist(id uint) bool {
+func (t *Tree) Exist(id IndexType) bool {
 	return t.findNode(id) != sentinel
 }
 
-// Count O(1)
-func (t *Tree) Count() uint {
+func (t *Tree) Count() CountType {
 	return t.count
 }
 
-// Move, silent, changes index of value O(2logn)
-func (t *Tree) Move(oid, nid uint) {
+func (t *Tree) Move(oid, nid IndexType) {
 	if n := t.findNode(oid); n != sentinel {
 		t.insertNode(nid, n.value)
 		t.deleteNode(n)
 	}
 }
 
-// Flush the tree O(1)
 func (t *Tree) Flush() *Tree {
 	t.root = sentinel
 	t.count = 0
@@ -333,8 +328,7 @@ func (t *Tree) Flush() *Tree {
 	return t
 }
 
-// Max returns maximum index and its value O(logn)
-func (t *Tree) Max() (uint, interface{}) {
+func (t *Tree) Max() (IndexType, ValueType) {
 	current := t.root
 	for current.right != sentinel {
 		current = current.right
@@ -342,8 +336,7 @@ func (t *Tree) Max() (uint, interface{}) {
 	return current.id, current.value
 }
 
-// Min returns minimum indedx and its value O(logn)
-func (t *Tree) Min() (uint, interface{}) {
+func (t *Tree) Min() (IndexType, ValueType) {
 	current := t.root
 	for current.left != sentinel {
 		current = current.left
@@ -351,26 +344,24 @@ func (t *Tree) Min() (uint, interface{}) {
 	return current.id, current.value
 }
 
-// walker function
-type Walker func(key uint, value interface{}) error
+type Walker func(key IndexType, value ValueType) error
 
-// error for stop walking
 var Stop = errors.New("stop a walking")
 
-func (n *node) walk_left(from, to uint, wl Walker) error {
-	if n.id > from {
+func (n *node) walk_left(from, to IndexType, wl Walker) error {
+	if Grater(n.id, from) {
 		if n.left != sentinel {
 			if err := n.left.walk_left(from, to, wl); err != nil {
 				return err
 			}
 		}
 	}
-	if n.id >= from && n.id <= to {
+	if GraterOrEqual(n.id, from) && LessOrEqual(n.id, to) {
 		if err := wl(n.id, n.value); err != nil {
 			return err
 		}
 	}
-	if n.id < to {
+	if Less(n.id, to) {
 		if n.right != sentinel {
 			if err := n.right.walk_left(from, to, wl); err != nil {
 				return err
@@ -381,19 +372,19 @@ func (n *node) walk_left(from, to uint, wl Walker) error {
 }
 
 func (n *node) walk_right(from, to uint, wl Walker) error {
-	if n.id < from {
+	if Less(n.id, from) {
 		if n.right != sentinel {
 			if err := n.right.walk_right(from, to, wl); err != nil {
 				return err
 			}
 		}
 	}
-	if n.id <= from && n.id >= to {
+	if LessOrEqual(n.id, from) && GraterOrEqual(n.id, to) {
 		if err := wl(n.id, n.value); err != nil {
 			return err
 		}
 	}
-	if n.id > to {
+	if Grater(n.id, to) {
 		if n.left != sentinel {
 			if err := n.left.walk_right(from, to, wl); err != nil {
 				return err
@@ -403,74 +394,22 @@ func (n *node) walk_right(from, to uint, wl Walker) error {
 	return nil
 }
 
-// Walking on tree.
-// You can to use any error to stop a walking.
-// Standart Stop error provided, for example:
-//
-//    if err := tr.Walk(0, 500, myWalker); err != nil && err != ebony.Stop {
-//        log.Println(err) // real error
-//    }
-//
-// To pass through the entire tree, use the minimum possible and
-// maximum possible values of the index. For example:
-//
-//    const (
-//        MinUint = 0
-//        MaxUint = ^uint(0)
-//    )
-//
-//    tr.Walk(MinUint, MaxUint, myWalker)
-//
-func (t *Tree) Walk(from, to uint, wl Walker) error {
-	if from == to {
+func (t *Tree) Walk(from, to IndexType, wl Walker) error {
+	if Equal(from, to) {
 		node := t.findNode(from)
 		if node != sentinel {
 			return wl(node.id, node.value)
 		}
 		return nil
-	} else if from < to {
+	} else if Less(from, to) {
 		return t.root.walk_left(from, to, wl)
 	} // else if to < from
 	return t.root.walk_right(from, to, wl)
 }
 
-// Range returns all values in given range if any.
-// O(logn+m), m = len(range), [b,e] order dependent of cpm(b, e)
-// Recursive. The required stack size is proportional to the height of the tree.
-// If there aren't values the result will be nil.
-// To simulate GraterThen and LaterThen methods use the minimum possible and
-// maximum possible values of the index. For example:
-//
-//    const (
-//        MinUint = 0
-//        MaxUint = ^uint(0)
-//    )
-//
-//    gt78 := tr.Range(78, MaxUint)
-//
-// To take k-v pairs use Walk method with custom walker like here:
-//
-//    type Pair struct {
-//        Key   uint
-//        Value interface{}
-//    }
-//
-//    func RangeKV(tr *ebony.Tree, from, to uint) []Pair {
-//        pr := []Pair{}
-//        wl := func(key uint, value interface{}) error {
-//            pr = append(pr, Pair{key, value})
-//            return nil
-//        }
-//        tr.Walk(from, to, wl)
-//        if len(pr) == 0 {
-//            return nil
-//        }
-//        return pr
-//    }
-//
-func (t *Tree) Range(from, to uint) []interface{} {
-	vals := []interface{}{}
-	wl := func(_ uint, value interface{}) error {
+func (t *Tree) Range(from, to IndexType) []ValueType {
+	vals := []ValueType{}
+	wl := func(_ IndexType, value ValueType) error {
 		vals = append(vals, value)
 		return nil
 	}
