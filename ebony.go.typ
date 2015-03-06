@@ -1,17 +1,3 @@
-// rb-tree with uint index, not thread safe
-//
-// Usage notes
-//
-// A nil is the value. Use Del() to delete value. But if value doesn't exist
-// method Get() returns nil. You can to use struct{} as an emty value to
-// avoid confusions. Walk() doesn't support Tree manipulations, yet (Set()
-// and Del() ops.).
-//
-//    If you want to lookup the tree much more than change it,
-//    take a look at LLRB (if memory usage are critical)
-//
-//    Read http://www.read.seas.harvard.edu/~kohler/notes/llrb.html
-//    Source https://github.com/petar/GoLLRB
 package ebony
 
 import (
@@ -19,17 +5,8 @@ import (
 	"runtime"
 )
 
-#define IndexType uint
-#define ValueType interface{}
-#define CountType uint
-
-#define Less(a,b) a < b
-#define Grater(a,b) a > b
-
-#define Equal(a,b) a == b
-
-#define LessOrEqual(a,b) a <= b
-#define GraterOrEqual(a,b) a >= b
+#include "types.typ"
+#include "typed.typ"
 
 const (
 	red   = true
@@ -42,10 +19,21 @@ type node struct {
 	parent *node
 	color  bool
 	id     IndexType
+#ifdef ValueType
 	value  ValueType
+#endif
 }
 
-var sentinel = &node{nil, nil, nil, black, 0, nil}
+var sentinel = &node{
+	nil,
+	nil,
+	nil,
+	black,
+	NilIndexType,
+#ifdef ValueType
+	nil,
+#endif
+}
 
 func init() {
 	sentinel.left, sentinel.right = sentinel, sentinel
@@ -143,12 +131,20 @@ func (t *Tree) insertFixup(x *node) {
 	t.root.color = black
 }
 
+#ifdef ValueType
 func (t *Tree) insertNode(id IndexType, value ValueType) {
+#else
+func (t *Tree) insertNode(id IndexType) {
+#endif
 	current := t.root
 	var parent *node
 	for current != sentinel {
 		if Equal(id, current.id) {
+#ifdef ValueType
 			current.value = value
+#else
+			current.id = id
+#endif
 			return
 		}
 		parent = current
@@ -159,7 +155,9 @@ func (t *Tree) insertNode(id IndexType, value ValueType) {
 		}
 	}
 	x := &node{
+#ifdef ValueType
 		value:  value,
+#endif
 		parent: parent,
 		left:   sentinel,
 		right:  sentinel,
@@ -265,7 +263,9 @@ func (t *Tree) deleteNode(z *node) {
 	}
 	if y != z {
 		z.id = y.id
+#ifdef ValueType
 		z.value = y.value
+#endif
 	}
 	if y.color == black {
 		t.deleteFixup(x)
@@ -294,17 +294,29 @@ func New() *Tree {
 	}
 }
 
+#ifdef ValueType
 func (t *Tree) Set(id IndexType, value ValueType) {
 	t.insertNode(id, value)
 }
+#else
+func (t *Tree) Set(id IndexType) {
+	t.insertNode(id)
+}
+#endif
 
 func (t *Tree) Del(id IndexType) {
 	t.deleteNode(t.findNode(id))
 }
 
+#ifdef ValueType
 func (t *Tree) Get(id IndexType) ValueType {
 	return t.findNode(id).value
 }
+#else
+func (t *Tree) Get(id IndexType) IndexType {
+	return t.findNode(id).id
+}
+#endif
 
 func (t *Tree) Exist(id IndexType) bool {
 	return t.findNode(id) != sentinel
@@ -316,7 +328,11 @@ func (t *Tree) Count() CountType {
 
 func (t *Tree) Move(oid, nid IndexType) {
 	if n := t.findNode(oid); n != sentinel {
+#ifdef ValueType
 		t.insertNode(nid, n.value)
+#else
+		t.insertNode(nid)
+#endif
 		t.deleteNode(n)
 	}
 }
@@ -328,23 +344,43 @@ func (t *Tree) Flush() *Tree {
 	return t
 }
 
+#ifdef ValueType
 func (t *Tree) Max() (IndexType, ValueType) {
+#else
+func (t *Tree) Max() IndexType {
+#endif
 	current := t.root
 	for current.right != sentinel {
 		current = current.right
 	}
+#ifdef ValueType
 	return current.id, current.value
+#else
+	return current.id
+#endif
 }
 
+#ifdef ValueType
 func (t *Tree) Min() (IndexType, ValueType) {
+#else
+func (t *Tree) Min() IndexType {
+#endif
 	current := t.root
 	for current.left != sentinel {
 		current = current.left
 	}
+#ifdef ValueType
 	return current.id, current.value
+#else
+	return current.id
+#endif
 }
 
+#ifdef ValueType
 type Walker func(key IndexType, value ValueType) error
+#else
+type Walker func(key IndexType) error
+#endif
 
 var Stop = errors.New("stop a walking")
 
@@ -357,7 +393,11 @@ func (n *node) walk_left(from, to IndexType, wl Walker) error {
 		}
 	}
 	if GraterOrEqual(n.id, from) && LessOrEqual(n.id, to) {
+#ifdef ValueType
 		if err := wl(n.id, n.value); err != nil {
+#else
+		if err := wl(n.id); err != nil {
+#endif
 			return err
 		}
 	}
@@ -371,7 +411,7 @@ func (n *node) walk_left(from, to IndexType, wl Walker) error {
 	return nil
 }
 
-func (n *node) walk_right(from, to uint, wl Walker) error {
+func (n *node) walk_right(from, to IndexType, wl Walker) error {
 	if Less(n.id, from) {
 		if n.right != sentinel {
 			if err := n.right.walk_right(from, to, wl); err != nil {
@@ -380,7 +420,11 @@ func (n *node) walk_right(from, to uint, wl Walker) error {
 		}
 	}
 	if LessOrEqual(n.id, from) && GraterOrEqual(n.id, to) {
+#ifdef ValueType
 		if err := wl(n.id, n.value); err != nil {
+#else
+		if err := wl(n.id); err != nil {
+#endif
 			return err
 		}
 	}
@@ -398,7 +442,11 @@ func (t *Tree) Walk(from, to IndexType, wl Walker) error {
 	if Equal(from, to) {
 		node := t.findNode(from)
 		if node != sentinel {
+#ifdef ValueType
 			return wl(node.id, node.value)
+#else
+			return wl(node.id)
+#endif
 		}
 		return nil
 	} else if Less(from, to) {
@@ -407,10 +455,17 @@ func (t *Tree) Walk(from, to IndexType, wl Walker) error {
 	return t.root.walk_right(from, to, wl)
 }
 
+#ifdef ValueType
 func (t *Tree) Range(from, to IndexType) []ValueType {
 	vals := []ValueType{}
 	wl := func(_ IndexType, value ValueType) error {
 		vals = append(vals, value)
+#else
+func (t *Tree) Range(from, to IndexType) []IndexType {
+	vals := []IndexType{}
+	wl := func(value IndexType) error {
+		vals = append(vals, value)
+#endif
 		return nil
 	}
 	t.Walk(from, to, wl)
