@@ -69,6 +69,18 @@ func TestRandomSetGetDel(t *testing.T) {
 			t.Errorf("[random set get] wrong count, expected %d, got %d",
 				len(kv), tr.Count())
 		}
+		if sentinel.parent != nil {
+			t.Error("[random set get] sentinel parent error")
+		}
+		if sentinel.left != sentinel {
+			t.Error("[random set get] sentinel left error")
+		}
+		if sentinel.right != sentinel {
+			t.Error("[random set get] sentinel right error")
+		}
+		if sentinel.color != black {
+			t.Error("[random set get] sentinel color error")
+		}
 	}
 }
 
